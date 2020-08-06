@@ -1,0 +1,1 @@
+from .translate import trans_cli
