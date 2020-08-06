@@ -9,44 +9,6 @@ from shutil import rmtree
 from setuptools import find_packages, setup, Command
 
 
-class UploadCommand(Command):
-    """Support setup.py upload."""
-
-    description = 'Build and publish the package.'
-    user_options = []
-
-    @staticmethod
-    def status(s):
-        """Prints things in bold."""
-        print('\033[1m{0}\033[0m'.format(s))
-
-    def initialize_options(self):
-        pass
-
-    def finalize_options(self):
-        pass
-
-    def run(self):
-        try:
-            self.status('Removing previous builds…')
-            rmtree(os.path.join(here, 'dist'))
-        except OSError:
-            pass
-
-        self.status('Building Source and Wheel (universal) distribution…')
-        os.system(
-            '{0} setup.py sdist bdist_wheel --universal'.format(sys.executable))
-
-        self.status('Uploading the package to PyPI via Twine…')
-        os.system('twine upload dist/*')
-
-        self.status('Pushing git tags…')
-        os.system('git tag v{0}'.format(about['__version__']))
-        os.system('git push --tags')
-
-        sys.exit()
-
-
 here = os.path.abspath(os.path.dirname(__file__))
 
 packages = ['nest']
@@ -89,12 +51,14 @@ setup(
         'Programming Language :: Python :: Implementation :: CPython',
         'Programming Language :: Python :: Implementation :: PyPy'
     ],
-    # $ setup.py publish support.
-    cmdclass={
-        'upload': UploadCommand,
-    },
 
     entry_points={
         'console_scripts': ['trans=nest:trans_cli'],
     },
 )
+
+# 'setup.py publish' shortcut.
+if sys.argv[-1] == 'publish':
+    os.system('python setup.py sdist bdist_wheel')
+    os.system('twine upload dist/*')
+    sys.exit()
