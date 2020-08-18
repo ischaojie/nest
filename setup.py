@@ -53,7 +53,10 @@ setup(
     ],
 
     entry_points={
-        'console_scripts': ['trans=nest:trans_cli'],
+        'console_scripts': [
+            'trans=nest:trans_cli',
+            'wea=nest:wea_cli'
+        ],
     },
 )
 

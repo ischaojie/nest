@@ -4,9 +4,18 @@ import uuid
 import time
 import hashlib
 
-APP_KEY = "218f4a5913a2b64d"
-APP_SECRET = "tn49UOKE8VBy5zezLGWjr8HnusRMcxW8"
-YOUDAO_URL = "https://openapi.youdao.com/api"
+AUTH = {
+    'youdao': {
+        'APP_KEY': '218f4a5913a2b64d',
+        'APP_SECRET': 'tn49UOKE8VBy5zezLGWjr8HnusRMcxW8',
+        'URL': 'https://openapi.youdao.com/api'
+    },
+    'baidu': {
+        'APP_KEY': '20200807000534875',
+        'APP_SECRET': '4rpXNwhV0dpMaZFiXFui',
+        'URL': 'https://fanyi-api.baidu.com/api/trans/vip/translate'
+    }
+}
 
 
 class BaseTranslate(object):
@@ -16,7 +25,7 @@ class BaseTranslate(object):
         self.to = to
 
     @staticmethod
-    def http_get(url: str, data: dict):
+    def request(url: str, data: dict):
         headers = {'Content-Type': 'application/x-www-form-urlencoded'}
         resp = requests.post(url=url, data=data, headers=headers)
         return resp.json()
@@ -33,30 +42,31 @@ class YoudaoTranslate(BaseTranslate):
 
         self.current_time = str(int(time.time()))
         self.salt = str(uuid.uuid4())
-        self.sign_str = APP_KEY + self.truncate() + self.salt + self.current_time + APP_SECRET
         self.sign = self.encrypt()
 
     def trans(self):
 
         trans_data = {
+            "q": self.q,
             "from": self.src,
             "to": self.to,
+            "appKey": AUTH['youdao']['APP_KEY'],
+            "salt": self.salt,
+            "sign": self.sign,
+
             "signType": "v3",
             "curtime": self.current_time,
-            "appKey": APP_KEY,
-            "q": self.q,
-            "salt": self.salt,
-            "sign": self.sign
+
         }
 
-        resp = self.http_get(YOUDAO_URL, trans_data)
+        resp = self.request(AUTH['youdao']['URL'], trans_data)
 
-        result = ''
+        result = []
 
         # base translation
         base_result = resp['translation'][0]
 
-        # web translation
+        # web translation and explains
         try:
             web_result = resp['web']
             explains = resp['basic']['explains']
@@ -67,18 +77,20 @@ class YoudaoTranslate(BaseTranslate):
         # if is word
         is_word = resp['isWord']
         if is_word:
-            result += base_result + '\n'
-            result += '\033[1;31m---\033[0m\n'
-            result += '\033[1;31m词性:\033[0m\n'
+            result.append(base_result)
+            result.append('\033[1;31m---\033[0m')
+            result.append('\033[1;31m词性:\033[0m')
             for exp in explains:
-                result += exp + '\n'
-            result += '\033[1;31m---\033[0m\n'
-            result += '\033[1;31m网络释义:\033[0m\n'
+                result.append(exp)
+            result.append('\033[1;31m---\033[0m')
+            result.append('\033[1;31m网络释义:\033[0m')
             for web in web_result:
                 value = ','.join(web['value'])
-                result += web['key'] + ':' + value + '\n'
+                result.append(web['key']+':'+value)
         else:
-            result += base_result + '\n'
+            result.append(base_result)
+
+        result = '\n'.join(result)
 
         error_code = resp['errorCode']
 
@@ -90,8 +102,13 @@ class YoudaoTranslate(BaseTranslate):
         return result
 
     def encrypt(self):
+        sign_str = AUTH['youdao']['APP_KEY'] \
+            + self.truncate() \
+            + self.salt \
+            + self.current_time \
+            + AUTH['youdao']['APP_SECRET']
         hash_algorithm = hashlib.sha256()
-        hash_algorithm.update(self.sign_str.encode('utf-8'))
+        hash_algorithm.update(sign_str.encode('utf-8'))
         return hash_algorithm.hexdigest()
 
     def truncate(self):
@@ -101,21 +118,62 @@ class YoudaoTranslate(BaseTranslate):
         return self.q if size <= 20 else self.q[0:10] + str(size) + self.q[size - 10:size]
 
 
+class BaiduTranslate(BaseTranslate):
+
+    def __init__(self, q, src, to):
+        super(BaiduTranslate, self).__init__(q, src, to)
+        self.salt = str(uuid.uuid4())
+        self.sign = self.encrypt()
+
+    def trans(self):
+        trans_data = {
+            "q": self.q,
+            "from": self.src,
+            "to": self.to,
+            "appid": AUTH['baidu']['APP_KEY'],
+            "salt": self.salt,
+            "sign": self.sign
+        }
+
+        resp = self.request(AUTH['baidu']['URL'], trans_data)
+
+        result = []
+
+        dst = resp['trans_result'][0]['dst']
+        result.append(dst)
+
+        return '\n'.join(result)
+
+    def encrypt(self):
+        sign_str = AUTH['baidu']['APP_KEY'] \
+            + self.q \
+            + self.salt \
+            + AUTH['baidu']['APP_SECRET']
+        hash_algorithm = hashlib.md5()
+        hash_algorithm.update(sign_str.encode('utf-8'))
+        return hash_algorithm.hexdigest()
+
+
 class GoogleTranslate(BaseTranslate):
     pass
 
 
 # trans
-def trans(q, translate='youdao', src='auto', to='auto'):
+def trans(q: str, engine='youdao', src='auto', to='auto') -> str:
     youdao = YoudaoTranslate(q, src, to)
     google = GoogleTranslate(q, src, to)
+    baidu = BaiduTranslate(q, src, to)
 
     result = ''
 
-    if translate == 'youdao':
+    if engine == 'youdao':
         result = youdao.trans()
-    elif translate == 'google':
+    elif engine == 'baidu':
+        result = baidu.trans()
+    elif engine == 'google':
         result = google.trans()
+    else:
+        result = '仅支持有道&百度'
 
     return result
 
@@ -123,14 +181,15 @@ def trans(q, translate='youdao', src='auto', to='auto'):
 @click.command()
 @click.option('--src', default='auto', help="source language")
 @click.option('--to', default='auto', help="target language")
-@click.option('--translate', default='youdao', help="translate engine")
+@click.option('--engine', default='youdao', show_default=True, help="translate engine")
 @click.argument('q')
-def trans_cli(q, translate, src, to):
+def trans_cli(q, engine, src, to):
     """this is a translation tool."""
-    click.echo("翻译结果来自: %s" % translate)
     click.echo("\033[1;31m---------------------\033[0m")
-    result = trans(q, src=src, to=to)
+    result = trans(q, src=src, to=to, engine=engine)
     click.echo(result)
+    click.echo("\033[1;31m---------------------\033[0m")
+    click.echo("翻译结果来自: %s" % engine)
 
 
 if __name__ == "__main__":
