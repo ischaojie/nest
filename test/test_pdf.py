@@ -53,8 +53,11 @@ def test_pdf_can_extract_first_pages(tmpdir):
     target = tmpdir.mkdir("target")
     content = ["page first", "page two", "page three", "page four", "page five"]
 
-    for i in range(1, 11):
+    for i in range(1, 1001):
         with open(f'{origin}/{i}.pdf', 'w+b') as f:
             create_pdf_file(content, f)
 
     spilt_first_pages(origin, target)
+
+
+

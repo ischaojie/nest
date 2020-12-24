@@ -1,25 +1,38 @@
 """
 PDF is a series tools for pdf split、convert、merge and so on...
 """
+from functools import partial
+from time import sleep
+
 from PyPDF2 import PdfFileReader, PdfFileWriter
-import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor
 import os
 import click
-from tqdm import tqdm
+from PyPDF2.utils import PdfReadError
+from tqdm import tqdm, trange
+from threading import RLock
+
+from tqdm.contrib.concurrent import thread_map
 
 
 def spilt_first_page(fro, to):
     """ extract first page of pdf files """
 
     with open(fro, 'rb') as f:
-        pdf = PdfFileReader(f)
+        try:
+            pdf = PdfFileReader(f)
+        except PdfReadError as e:
+            return 'pdf read error'
 
         # extract first pdf page
         writer = PdfFileWriter()
-        writer.addPage(pdf.getPage(0))
+        try:
+            writer.addPage(pdf.getPage(0))
+        except PdfReadError as e:
+            return 'pdf read error'
         # write to file
-        with open(to, "w+b") as f:
-            writer.write(f)
+        with open(to, "w+b") as to_f:
+            writer.write(to_f)
 
     return "ok"
 
@@ -30,15 +43,9 @@ def spilt_first_pages(origin, target):
         for name in os.listdir(origin)
         if os.path.isfile(os.path.join(origin, name))
     ]
-    pdf_nums = len(pdf_files)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-        result_bar = tqdm(zip(pdf_files, executor.map(lambda x: spilt_first_page(*x), pdf_files)), total=pdf_nums)
-        for bar in result_bar:
-            pass
-        # for file, result in zip(
-        #         pdf_files, executor.map(lambda x: spilt_first_page(*x), pdf_files)
-        # ):
-        #     print("{} extract result is {}".format(file, result))
+
+    thread_map(lambda x: spilt_first_page(*x), pdf_files)
+
 
 
 @click.command()
