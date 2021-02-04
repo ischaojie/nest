@@ -2,7 +2,7 @@
 
 import typer
 from typing import Optional
-from translate import trans
+from .translate import trans
 import sys
 import subprocess
 import os
